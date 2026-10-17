@@ -1,0 +1,43 @@
+{
+  "name": "amazon",
+  "version": "1.0.0",
+  "description": "LifeOS - Personal AI planning agent for Amazon AppDev 2026 Alexa+ hackathon",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tsx watch server.ts",
+    "test": "tsx --test tests/**/*.test.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChessyCake/amazon-developer-hackathon.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ChessyCake/amazon-developer-hackathon/issues"
+  },
+  "homepage": "https://github.com/ChessyCake/amazon-developer-hackathon#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@prisma/client": "^6.19.3",
+    "dotenv": "^16.6.1",
+    "express": "^5.3.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.5",
+    "prisma": "^6.19.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

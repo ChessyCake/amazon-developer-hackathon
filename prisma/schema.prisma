@@ -1,0 +1,156 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PlanStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum PlanItemType {
+  TASK
+  EVENT
+  BREAK
+  BUFFER
+}
+
+model User {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  name           String?
+  timezone       String           @default("Asia/Kolkata")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  tasks          Task[]
+  calendarEvents CalendarEvent[]
+  preferences    UserPreference?
+  plans          Plan[]
+  actionHistory  ActionHistory[]
+
+  @@map("users")
+}
+
+model Task {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  duration    Int           @default(30)
+  priority    TaskPriority  @default(MEDIUM)
+  deadline    DateTime?
+  status      TaskStatus    @default(PENDING)
+  tags        String[]      @default([])
+  completedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  planItems   PlanItem[]
+
+  @@index([userId, status])
+  @@index([userId, deadline])
+  @@map("tasks")
+}
+
+model CalendarEvent {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  isAllDay    Boolean    @default(false)
+  location    String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  planItems   PlanItem[]
+
+  @@index([userId, startTime, endTime])
+  @@map("calendar_events")
+}
+
+model UserPreference {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  focusMinutes  Int      @default(45)
+  breakMinutes  Int      @default(10)
+  workStartTime String   @default("09:00")
+  workEndTime   String   @default("18:00")
+  bufferMinutes Int      @default(5)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+model Plan {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String
+  status    PlanStatus @default(DRAFT)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     PlanItem[]
+
+  @@unique([userId, date])
+  @@map("plans")
+}
+
+model PlanItem {
+  id              String         @id @default(cuid())
+  planId          String
+  plan            Plan           @relation(fields: [planId], references: [id], onDelete: Cascade)
+  itemType        PlanItemType
+  title           String
+  startTime       DateTime
+  endTime         DateTime
+  order           Int
+  isCompleted     Boolean        @default(false)
+  taskId          String?
+  task            Task?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  calendarEventId String?
+  calendarEvent   CalendarEvent? @relation(fields: [calendarEventId], references: [id], onDelete: SetNull)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([planId, order])
+  @@map("plan_items")
+}
+
+model ActionHistory {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actionType String
+  entityType String
+  entityId   String?
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, entityType, entityId])
+  @@map("action_history")
+}
