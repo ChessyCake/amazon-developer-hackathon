@@ -26,23 +26,19 @@ export async function generateAndSavePlan(
   const { date, overwriteApproved = false } = options;
 
   // 1. Check for existing approved plan
-  const existingPlan = await prisma.plan.findUnique({
+  const existingPlan = await prisma.plan.findFirst({
     where: {
-      userId_date: {
-        userId: targetUserId,
-        date,
-      },
+      userId: targetUserId,
+      date,
+      status: { in: [PlanStatus.ACTIVE, PlanStatus.COMPLETED] },
     },
+    orderBy: { version: "desc" },
     include: {
       items: true,
     },
   });
 
-  if (
-    existingPlan &&
-    (existingPlan.status === PlanStatus.ACTIVE || existingPlan.status === PlanStatus.COMPLETED) &&
-    !overwriteApproved
-  ) {
+  if (existingPlan && !overwriteApproved) {
     throw new ApprovedPlanExistsError(date);
   }
 
@@ -97,14 +93,25 @@ export async function generateAndSavePlan(
 
   // 4. Persist plan in transaction
   const plan = await prisma.$transaction(async (tx) => {
-    // Delete existing plan items if re-generating for this date
-    if (existingPlan) {
-      await tx.planItem.deleteMany({
-        where: { planId: existingPlan.id },
-      });
-      await tx.plan.delete({
-        where: { id: existingPlan.id },
-      });
+    // If regenerating and an existing plan was found, clean up if it was a draft
+    const latestPlan = await tx.plan.findFirst({
+      where: { userId: targetUserId, date },
+      orderBy: { version: "desc" },
+    });
+
+    let nextVersion = 1;
+    if (latestPlan) {
+      if (latestPlan.status === PlanStatus.DRAFT) {
+        await tx.planItem.deleteMany({
+          where: { planId: latestPlan.id },
+        });
+        await tx.plan.delete({
+          where: { id: latestPlan.id },
+        });
+        nextVersion = latestPlan.version;
+      } else {
+        nextVersion = latestPlan.version + 1;
+      }
     }
 
     const newPlan = await tx.plan.create({
@@ -112,6 +119,7 @@ export async function generateAndSavePlan(
         userId: targetUserId,
         date,
         status: PlanStatus.DRAFT,
+        version: nextVersion,
       },
     });
 
@@ -142,7 +150,7 @@ export async function generateAndSavePlan(
           scheduledCount: scheduleResult.scheduledItems.length,
           unscheduledCount: scheduleResult.unscheduledTasks.length,
           isFeasible: scheduleResult.isFeasible,
-          metrics: scheduleResult.metrics,
+          metrics: scheduleResult.metrics as any,
         },
       },
     });
@@ -163,19 +171,34 @@ export async function getPlan(
 ): Promise<{ plan: unknown | null }> {
   const targetUserId = await resolveUserId(userId);
 
-  const plan = await prisma.plan.findUnique({
+  let plan = await prisma.plan.findFirst({
     where: {
-      userId_date: {
-        userId: targetUserId,
-        date,
-      },
+      userId: targetUserId,
+      date,
+      status: PlanStatus.ACTIVE,
     },
+    orderBy: { version: "desc" },
     include: {
       items: {
         orderBy: { order: "asc" },
       },
     },
   });
+
+  if (!plan) {
+    plan = await prisma.plan.findFirst({
+      where: {
+        userId: targetUserId,
+        date,
+      },
+      orderBy: { version: "desc" },
+      include: {
+        items: {
+          orderBy: { order: "asc" },
+        },
+      },
+    });
+  }
 
   return { plan };
 }
@@ -198,6 +221,17 @@ export async function approvePlan(
     if (!existing) {
       throw new Error(`Plan with id '${planId}' not found for user.`);
     }
+
+    // Mark any existing active plans as superseded
+    await tx.plan.updateMany({
+      where: {
+        userId: targetUserId,
+        date: existing.date,
+        status: PlanStatus.ACTIVE,
+        id: { not: planId },
+      },
+      data: { status: PlanStatus.SUPERSEDED },
+    });
 
     const updated = await tx.plan.update({
       where: { id: planId },

@@ -124,8 +124,9 @@ export class LifeOSMcpClient {
         arguments: toolCall.arguments,
       });
 
-      const firstTextContent = result.content?.find(
-        (c) => c.type === "text"
+      const contentList = (result.content as any[]) || [];
+      const firstTextContent = contentList.find(
+        (c: any) => c.type === "text"
       ) as { type: "text"; text: string } | undefined;
 
       const rawText = firstTextContent?.text || JSON.stringify(result);

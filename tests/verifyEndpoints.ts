@@ -1,5 +1,5 @@
 async function sendMcp(method: string, params?: unknown) {
-  const res = await fetch("http://127.0.0.1:3000/mcp", {
+  const res = await fetch("http://localhost:3000/mcp", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -136,7 +136,84 @@ async function verifyAll() {
   });
   console.log("approve_plan result:", approvePlanRes.result?.content?.[0]?.text);
 
-  console.log("\nALL 11 MCP TOOLS VERIFIED SUCCESSFULLY VIA LIVE HTTP TRANSPORT!");
+  console.log("\n--- 13. Testing preview_replan ---");
+  const previewRes = await sendMcp("tools/call", {
+    name: "preview_replan",
+    arguments: {
+      date: "2026-10-18",
+      reason: "Lab ran 1 hour late",
+      delayedEvents: [
+        {
+          eventId: "dummy-event-1",
+          title: "Chemistry Lab",
+          delayMinutes: 60,
+        },
+      ],
+      preservedTaskIds: ["Exam preparation"],
+    },
+  });
+  console.log("preview_replan result:", previewRes.result?.content?.[0]?.text);
+  const previewObj = JSON.parse(previewRes.result?.content?.[0]?.text || "{}");
+  const proposedPlanId = previewObj.proposedPlanId;
+  const proposedVersion = previewObj.proposedVersion;
+
+  console.log("\n--- 14. Testing compare_plans ---");
+  const compareRes = await sendMcp("tools/call", {
+    name: "compare_plans",
+    arguments: {
+      basePlanId: planId,
+      targetPlanId: proposedPlanId,
+    },
+  });
+  console.log("compare_plans result:", compareRes.result?.content?.[0]?.text);
+
+  console.log("\n--- 15. Testing commit_plan ---");
+  const commitRes = await sendMcp("tools/call", {
+    name: "commit_plan",
+    arguments: {
+      planId: proposedPlanId,
+      expectedVersion: proposedVersion,
+    },
+  });
+  console.log("commit_plan result:", commitRes.result?.content?.[0]?.text);
+
+  console.log("\n--- 16. Testing get_plan_history ---");
+  const historyRes = await sendMcp("tools/call", {
+    name: "get_plan_history",
+    arguments: {
+      date: "2026-10-18",
+    },
+  });
+  console.log("get_plan_history result:", historyRes.result?.content?.[0]?.text);
+
+  console.log("\n--- 17. Testing rollback_plan ---");
+  const rollbackRes = await sendMcp("tools/call", {
+    name: "rollback_plan",
+    arguments: {
+      date: "2026-10-18",
+    },
+  });
+  console.log("rollback_plan result:", rollbackRes.result?.content?.[0]?.text);
+
+  console.log("\n--- 18. Testing reject_plan (on new candidate) ---");
+  const candidatePreviewRes = await sendMcp("tools/call", {
+    name: "preview_replan",
+    arguments: {
+      date: "2026-10-18",
+      reason: "Testing rejection",
+    },
+  });
+  const candidateObj = JSON.parse(candidatePreviewRes.result?.content?.[0]?.text || "{}");
+  const rejectRes = await sendMcp("tools/call", {
+    name: "reject_plan",
+    arguments: {
+      planId: candidateObj.proposedPlanId,
+      reason: "Prefer sticking to restored plan",
+    },
+  });
+  console.log("reject_plan result:", rejectRes.result?.content?.[0]?.text);
+
+  console.log("\nALL 17 MCP TOOLS VERIFIED SUCCESSFULLY VIA LIVE HTTP TRANSPORT!");
 }
 
 verifyAll().catch((err) => {

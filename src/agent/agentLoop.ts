@@ -136,7 +136,32 @@ export async function runAgent(
             toolCall.arguments.userId = targetUserId;
           }
 
-          const execResult = await mcpClient.executeTool(toolCall);
+          // Stage 4 Safety Guardrail: Prevent model from autonomously approving/committing plans (Requirement 14)
+          let execResult;
+          if (toolCall.name === "commit_plan" || toolCall.name === "approve_plan") {
+            const isUserAffirmative =
+              /(approve|commit|confirm|proceed|apply|yes|ok|sure|accept|do it)/i.test(
+                userMessage
+              );
+            if (!isUserAffirmative) {
+              execResult = {
+                success: false,
+                isError: true,
+                rawText: JSON.stringify({
+                  error:
+                    "SAFETY_VIOLATION: Autonomous plan approval is disabled. You must present the proposed replan diff and trade-offs to the user and request their explicit approval before calling commit_plan.",
+                }),
+                data: {
+                  error:
+                    "SAFETY_VIOLATION: Autonomous plan approval is disabled. Explicit user approval is required.",
+                },
+              };
+            }
+          }
+
+          if (!execResult) {
+            execResult = await mcpClient.executeTool(toolCall);
+          }
 
           actionsExecuted.push({
             tool: toolCall.name,
@@ -156,7 +181,7 @@ export async function runAgent(
               payload: {
                 conversationId,
                 toolName: toolCall.name,
-                arguments: toolCall.arguments,
+                arguments: toolCall.arguments as any,
                 success: execResult.success,
                 isError: execResult.isError,
               },

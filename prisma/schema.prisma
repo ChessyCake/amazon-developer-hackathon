@@ -24,8 +24,11 @@ enum TaskStatus {
 
 enum PlanStatus {
   DRAFT
+  PROPOSED
   ACTIVE
   COMPLETED
+  SUPERSEDED
+  REJECTED
   ARCHIVED
 }
 
@@ -110,16 +113,20 @@ model UserPreference {
 }
 
 model Plan {
-  id        String     @id @default(cuid())
-  userId    String
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date      String
-  status    PlanStatus @default(DRAFT)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  items     PlanItem[]
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date         String
+  status       PlanStatus @default(DRAFT)
+  version      Int        @default(1)
+  parentPlanId String?
+  replanReason String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  items        PlanItem[]
 
-  @@unique([userId, date])
+  @@unique([userId, date, version])
+  @@index([userId, date, status])
   @@map("plans")
 }
 
@@ -133,6 +140,9 @@ model PlanItem {
   endTime         DateTime
   order           Int
   isCompleted     Boolean        @default(false)
+  isPinned        Boolean        @default(false)
+  part            Int?
+  totalParts      Int?
   taskId          String?
   task            Task?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
   calendarEventId String?
