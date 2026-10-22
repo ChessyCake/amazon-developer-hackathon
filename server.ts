@@ -54,9 +54,11 @@ const port = Number(process.env.PORT ?? 3000);
 
 export { app, server };
 
+const host = process.env.HOST ?? "0.0.0.0";
+
 if (process.env.NODE_ENV !== "test") {
-  app.listen(port, "127.0.0.1", () => {
-    console.log(`LifeOS MCP server running on http://127.0.0.1:${port}`);
-    console.log(`MCP endpoint: http://127.0.0.1:${port}/mcp`);
+  app.listen(port, host, () => {
+    console.log(`LifeOS MCP server running on http://${host}:${port}`);
+    console.log(`MCP endpoint: http://${host}:${port}/mcp`);
   });
 }

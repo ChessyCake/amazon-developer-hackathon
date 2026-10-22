@@ -10,6 +10,8 @@ export interface CreateTaskInput {
   priority?: TaskPriority;
   deadline?: string | Date | null;
   tags?: string[];
+  dependencies?: string[];
+  allowSplitting?: boolean;
 }
 
 export interface ListTasksFilter {
@@ -30,6 +32,8 @@ export interface UpdateTaskInput {
   deadline?: string | Date | null;
   status?: TaskStatus;
   tags?: string[];
+  dependencies?: string[];
+  allowSplitting?: boolean;
 }
 
 export class TaskNotFoundError extends Error {
@@ -63,6 +67,8 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
         deadline: deadlineDate,
         status: TaskStatus.PENDING,
         tags: input.tags ?? [],
+        dependencies: input.dependencies ?? [],
+        allowSplitting: input.allowSplitting ?? false,
       },
     });
 
@@ -78,6 +84,8 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
           duration: task.duration,
           deadline: task.deadline?.toISOString() ?? null,
           tags: task.tags,
+          dependencies: task.dependencies,
+          allowSplitting: task.allowSplitting,
         },
       },
     });
@@ -173,6 +181,12 @@ export async function updateTask(input: UpdateTaskInput): Promise<Task> {
     }
     if (input.tags !== undefined) {
       dataToUpdate.tags = input.tags;
+    }
+    if (input.dependencies !== undefined) {
+      dataToUpdate.dependencies = input.dependencies;
+    }
+    if (input.allowSplitting !== undefined) {
+      dataToUpdate.allowSplitting = input.allowSplitting;
     }
     if (input.status !== undefined) {
       dataToUpdate.status = input.status;

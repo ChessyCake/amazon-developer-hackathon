@@ -39,5 +39,9 @@
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
+  },
+  "optionalDependencies": {
+    "@esbuild/linux-x64": "^0.28.2",
+    "@esbuild/win32-x64": "^0.28.2"
   }
 }

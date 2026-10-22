@@ -9,8 +9,8 @@
 
 ```
 ├── prisma/
-│   ├── schema.prisma       # Data models: User, Task, CalendarEvent, UserPreference, Plan, PlanItem, ActionHistory
-│   ├── seed.ts             # Deterministic seed data (Asia/Kolkata demo user, events, tasks, preferences)
+│   ├── schema.prisma       # Data models: User, Task, CalendarEvent, UserPreference, Plan, PlanItem, ActionHistory, Conversation, ConversationMessage
+│   ├── seed.ts             # Deterministic seed data (Asia/Kolkata demo user, sample events & tasks)
 │   └── migrations/         # PostgreSQL migration history
 ├── src/
 │   ├── db/
@@ -18,12 +18,25 @@
 │   ├── services/
 │   │   ├── taskService.ts      # Task CRUD, multi-user isolation & ActionHistory audit
 │   │   ├── preferenceService.ts# Work hours & focus/break preference logic
-│   │   └── contextService.ts   # Timezone-aware day context aggregator
+│   │   ├── contextService.ts   # Timezone-aware day context aggregator
+│   │   └── planService.ts      # Plan persistence, approval protection & transactions
+│   ├── planner/
+│   │   ├── types.ts        # Interfaces for tasks, slots, scheduled items & metrics
+│   │   ├── intervals.ts    # Timezone-aware busy interval merging & free slot math
+│   │   ├── scheduler.ts    # Deterministic greedy scheduling engine with focus breaks & splitting
+│   │   └── validator.ts    # Independent final plan validation pass
+│   ├── agent/
+│   │   ├── types.ts        # LLM message, tool definitions & agent result types
+│   │   ├── prompt.ts       # Anti-hallucination grounded system prompt
+│   │   ├── mcpClient.ts    # Official MCP client (in-memory & HTTP transport)
+│   │   ├── agentLoop.ts    # Bounded conversational loop with action feed recording
+│   │   └── adapters/       # Replaceable model adapters (Gemini, OpenAI, Mock)
 │   ├── tools/
 │   │   ├── taskTools.ts        # create_task, list_tasks, update_task, complete_task, delete_task
 │   │   ├── preferenceTools.ts  # get_preferences, update_preferences
 │   │   ├── contextTools.ts     # get_day_context (backward-compatible contract)
-│   │   └── register.ts         # Aggregates and mounts tools on McpServer
+│   │   ├── planTools.ts        # generate_plan, get_plan, approve_plan
+│   │   └── register.ts         # Aggregates and mounts all 11 tools on McpServer
 │   └── utils/
 │       ├── timezone.ts     # Asia/Kolkata (+05:30) date range calculations
 │       └── errors.ts       # Sanitized MCP error responses
@@ -31,8 +44,10 @@
 │   ├── task.test.ts        # Task CRUD, filters, validation & status transitions
 │   ├── preferences.test.ts # Preferences retrieval & boundary validations
 │   ├── persistence.test.ts # Multi-user isolation & transaction verification
+│   ├── scheduler.test.ts   # Deterministic scheduling, breaks, splits, dependencies & approval locks
+│   ├── agent.test.ts       # Conversational tool calling, multi-tool requests & bounded execution
 │   ├── mcpTools.test.ts    # McpServer registration & contract checks
-│   └── verifyEndpoints.ts  # End-to-end live HTTP verification script
+│   └── verifyEndpoints.ts  # End-to-end live HTTP verification script for all 11 tools
 ├── server.ts               # Express server, health check & Streamable HTTP MCP transport
 ├── .env.example            # Environment template
 └── tsconfig.json           # NodeNext TypeScript configuration
@@ -212,6 +227,9 @@ curl -X POST http://127.0.0.1:3000/mcp \
 | `get_preferences` | Retrieves active user preferences and timezone. | `userId` |
 | `update_preferences` | Updates focus/break times, working hours, buffers, or timezone. | `focusMinutes`, `breakMinutes`, `workStartTime`, `workEndTime`, `bufferMinutes`, `timezone`, `userId` |
 | `get_day_context` | Aggregates fixed calendar events, pending tasks, and preferences for a date. | `date` (YYYY-MM-DD, required), `userId` |
+| `generate_plan` | Deterministically schedules tasks around fixed events with breaks, focus slots, and validation. Saves DRAFT plan. | `date` (YYYY-MM-DD, required), `overwriteApproved`, `userId` |
+| `get_plan` | Retrieves proposed DRAFT or ACTIVE daily schedule. | `date` (YYYY-MM-DD, required), `userId` |
+| `approve_plan` | Approves a proposed DRAFT plan, transitioning it to ACTIVE status with approval lock. | `planId` (required), `userId` |
 
 ---
 

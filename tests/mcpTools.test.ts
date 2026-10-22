@@ -26,7 +26,7 @@ test.after(async () => {
   await prisma.$disconnect();
 });
 
-test("McpServer registers all 8 Stage 1 tools", async () => {
+test("McpServer registers all LifeOS tools (Stage 1 & Stage 2)", async () => {
   const server = new McpServer({ name: "lifeos-test", version: "0.1.0" });
   registerAllTools(server);
 

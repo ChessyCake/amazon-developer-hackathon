@@ -28,6 +28,8 @@ export function registerTaskTools(server: McpServer): void {
         priority: TaskPriorityEnum.optional().describe("Task priority: LOW, MEDIUM, HIGH, URGENT (default MEDIUM)"),
         deadline: z.string().optional().describe("Deadline as ISO-8601 string or date"),
         tags: z.array(z.string()).optional().describe("List of string tags for categorization"),
+        dependencies: z.array(z.string()).optional().describe("List of task IDs that must be completed first"),
+        allowSplitting: z.boolean().optional().describe("Whether this task can be split across slots"),
         userId: z.string().optional().describe("Target user ID (defaults to demo user)"),
       },
     },
@@ -41,6 +43,8 @@ export function registerTaskTools(server: McpServer): void {
           priority: args.priority,
           deadline: args.deadline,
           tags: args.tags,
+          dependencies: args.dependencies,
+          allowSplitting: args.allowSplitting,
         });
 
         return formatSuccessResponse({
@@ -54,6 +58,8 @@ export function registerTaskTools(server: McpServer): void {
             deadline: task.deadline?.toISOString() ?? null,
             status: task.status,
             tags: task.tags,
+            dependencies: task.dependencies,
+            allowSplitting: task.allowSplitting,
             createdAt: task.createdAt.toISOString(),
             updatedAt: task.updatedAt.toISOString(),
           },
@@ -100,6 +106,8 @@ export function registerTaskTools(server: McpServer): void {
             deadline: t.deadline?.toISOString() ?? null,
             status: t.status,
             tags: t.tags,
+            dependencies: t.dependencies,
+            allowSplitting: t.allowSplitting,
             completedAt: t.completedAt?.toISOString() ?? null,
             createdAt: t.createdAt.toISOString(),
             updatedAt: t.updatedAt.toISOString(),
@@ -117,7 +125,7 @@ export function registerTaskTools(server: McpServer): void {
     {
       title: "Update Task",
       description:
-        "Update an existing task's title, description, duration, priority, deadline, status, or tags.",
+        "Update an existing task's title, description, duration, priority, deadline, status, tags, dependencies, or allowSplitting.",
       inputSchema: {
         id: z.string().min(1, "Task ID is required"),
         title: z.string().min(1).optional(),
@@ -127,6 +135,8 @@ export function registerTaskTools(server: McpServer): void {
         deadline: z.string().nullable().optional().describe("ISO-8601 date string, or null to clear"),
         status: TaskStatusEnum.optional(),
         tags: z.array(z.string()).optional(),
+        dependencies: z.array(z.string()).optional(),
+        allowSplitting: z.boolean().optional(),
         userId: z.string().optional().describe("Target user ID (defaults to demo user)"),
       },
     },
@@ -142,6 +152,8 @@ export function registerTaskTools(server: McpServer): void {
           deadline: args.deadline,
           status: args.status,
           tags: args.tags,
+          dependencies: args.dependencies,
+          allowSplitting: args.allowSplitting,
         });
 
         return formatSuccessResponse({
@@ -155,6 +167,8 @@ export function registerTaskTools(server: McpServer): void {
             deadline: updated.deadline?.toISOString() ?? null,
             status: updated.status,
             tags: updated.tags,
+            dependencies: updated.dependencies,
+            allowSplitting: updated.allowSplitting,
             completedAt: updated.completedAt?.toISOString() ?? null,
             updatedAt: updated.updatedAt.toISOString(),
           },

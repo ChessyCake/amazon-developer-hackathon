@@ -4,7 +4,8 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 enum TaskPriority {
@@ -47,25 +48,28 @@ model User {
   preferences    UserPreference?
   plans          Plan[]
   actionHistory  ActionHistory[]
+  conversations  Conversation[]
 
   @@map("users")
 }
 
 model Task {
-  id          String        @id @default(cuid())
-  userId      String
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title       String
-  description String?
-  duration    Int           @default(30)
-  priority    TaskPriority  @default(MEDIUM)
-  deadline    DateTime?
-  status      TaskStatus    @default(PENDING)
-  tags        String[]      @default([])
-  completedAt DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  planItems   PlanItem[]
+  id             String        @id @default(cuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  duration       Int           @default(30)
+  priority       TaskPriority  @default(MEDIUM)
+  deadline       DateTime?
+  status         TaskStatus    @default(PENDING)
+  tags           String[]      @default([])
+  dependencies   String[]      @default([])
+  allowSplitting Boolean       @default(false)
+  completedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  planItems      PlanItem[]
 
   @@index([userId, status])
   @@index([userId, deadline])
@@ -153,4 +157,31 @@ model ActionHistory {
   @@index([userId, createdAt])
   @@index([userId, entityType, entityId])
   @@map("action_history")
+}
+
+model Conversation {
+  id        String                @id @default(cuid())
+  userId    String
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  messages  ConversationMessage[]
+
+  @@index([userId, createdAt])
+  @@map("conversations")
+}
+
+model ConversationMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String?
+  toolCalls      Json?
+  toolCallId     String?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("conversation_messages")
 }

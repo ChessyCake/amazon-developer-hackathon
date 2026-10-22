@@ -106,7 +106,37 @@ async function verifyAll() {
   });
   console.log("get_day_context result:", contextRes.result?.content?.[0]?.text);
 
-  console.log("\nALL 8 MCP TOOLS VERIFIED SUCCESSFULLY VIA LIVE HTTP TRANSPORT!");
+  console.log("\n--- 10. Testing generate_plan ---");
+  const planRes = await sendMcp("tools/call", {
+    name: "generate_plan",
+    arguments: {
+      date: "2026-10-18",
+      overwriteApproved: true,
+    },
+  });
+  console.log("generate_plan result:", planRes.result?.content?.[0]?.text);
+  const planObj = JSON.parse(planRes.result?.content?.[0]?.text || "{}");
+  const planId = planObj.planId;
+
+  console.log("\n--- 11. Testing get_plan ---");
+  const getPlanRes = await sendMcp("tools/call", {
+    name: "get_plan",
+    arguments: {
+      date: "2026-10-18",
+    },
+  });
+  console.log("get_plan result:", getPlanRes.result?.content?.[0]?.text);
+
+  console.log("\n--- 12. Testing approve_plan ---");
+  const approvePlanRes = await sendMcp("tools/call", {
+    name: "approve_plan",
+    arguments: {
+      planId,
+    },
+  });
+  console.log("approve_plan result:", approvePlanRes.result?.content?.[0]?.text);
+
+  console.log("\nALL 11 MCP TOOLS VERIFIED SUCCESSFULLY VIA LIVE HTTP TRANSPORT!");
 }
 
 verifyAll().catch((err) => {
