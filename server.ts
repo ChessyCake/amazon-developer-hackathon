@@ -3,9 +3,25 @@ import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { registerAllTools } from "./src/tools/register.js";
+import { apiRouter } from "./src/routes/api.js";
 
 const app = express();
 app.use(express.json());
+
+// Enable CORS for frontend clients
+app.use((_req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (_req.method === "OPTIONS") {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
+
+// REST API routes for frontend
+app.use("/api", apiRouter);
 
 // Initialize the LifeOS MCP Server
 const server = new McpServer({
