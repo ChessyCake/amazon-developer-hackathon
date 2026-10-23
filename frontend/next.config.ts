@@ -1,19 +1,24 @@
 import type { NextConfig } from "next";
 
+const backendUrl =
+  process.env.BACKEND_INTERNAL_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:3000";
+
 const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
         source: "/api/:path*",
-        destination: "http://localhost:3000/api/:path*",
+        destination: `${backendUrl}/api/:path*`,
       },
       {
         source: "/mcp",
-        destination: "http://localhost:3000/mcp",
+        destination: `${backendUrl}/mcp`,
       },
       {
         source: "/health",
-        destination: "http://localhost:3000/health",
+        destination: `${backendUrl}/health`,
       },
     ];
   },

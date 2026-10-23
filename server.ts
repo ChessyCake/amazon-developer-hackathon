@@ -4,8 +4,21 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { registerAllTools } from "./src/tools/register.js";
 import { apiRouter } from "./src/routes/api.js";
+import { prisma } from "./src/db/client.js";
 
 const app = express();
+
+// Production Request Logger (Method, URL, Status, Latency - zero sensitive data logged)
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (process.env.NODE_ENV !== "test") {
+      console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl || req.url} ${res.statusCode} - ${duration}ms`);
+    }
+  });
+  next();
+});
 
 // Security: Enforce 1MB payload size limit to prevent memory exhaustion DoS
 app.use(express.json({ limit: "1mb" }));
@@ -59,15 +72,49 @@ const server = new McpServer({
   version: "0.1.0",
 });
 
-// Register all LifeOS Stage 1 MCP tools (tasks, preferences, day context)
+// Register all LifeOS Stage 1, 2, 4, and 6 MCP tools
 registerAllTools(server);
 
-// Health check endpoint
-app.get("/health", (_req, res) => {
+// Production Health Check: Verifies service status and live PostgreSQL connectivity
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({
+      status: "healthy",
+      service: "lifeos-mcp",
+      database: "connected",
+      version: "0.1.0",
+      transport: "StreamableHTTP",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    res.status(503).json({
+      status: "unhealthy",
+      service: "lifeos-mcp",
+      database: "disconnected",
+      error: error?.message || "Database connection error",
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// MCP Discovery Metadata Endpoint
+app.get("/mcp", (_req, res) => {
   res.json({
-    status: "ok",
-    service: "lifeos-mcp",
-    timestamp: new Date().toISOString(),
+    name: "lifeos",
+    version: "0.1.0",
+    protocolVersion: "2024-11-05",
+    description: "LifeOS Personal AI Planning Agent MCP Endpoint",
+    transport: "StreamableHTTP",
+    usage: {
+      method: "POST",
+      endpoint: "/mcp",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      },
+      supportedOperations: ["tools/list", "tools/call"],
+    },
   });
 });
 
