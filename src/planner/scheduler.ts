@@ -260,6 +260,8 @@ export function scheduleDay(input: PlannerInput): PlannerResult {
 
     // Helper to find a free slot accommodating duration after earliestAllowedStartTime
     let scheduledSuccessfully = false;
+    let deadlinePreventedScheduling = false;
+    let earliestFinish: Date | undefined;
 
     if (!task.allowSplitting) {
       // Must fit in a single continuous block
@@ -274,6 +276,10 @@ export function scheduleDay(input: PlannerInput): PlannerResult {
 
           // Check deadline compliance
           if (task.deadline && taskEnd.getTime() > new Date(task.deadline).getTime()) {
+            deadlinePreventedScheduling = true;
+            if (!earliestFinish || taskEnd.getTime() < earliestFinish.getTime()) {
+              earliestFinish = taskEnd;
+            }
             continue; // Doesn't finish before deadline in this slot, try next
           }
 
@@ -330,20 +336,32 @@ export function scheduleDay(input: PlannerInput): PlannerResult {
       }
 
       if (!scheduledSuccessfully) {
-        const largestSlot = currentFreeSlots.reduce(
-          (max, s) => Math.max(max, s.durationMinutes),
-          0
-        );
-        unscheduledTasks.push({
-          taskId: task.id,
-          title: task.title,
-          duration: task.duration,
-          priority: task.priority,
-          reason: `Requires ${task.duration}m continuous time, but largest available slot is ${largestSlot}m (splitting not permitted).`,
-        });
-        explanations.push(
-          `Could not fit '${task.title}' (${task.duration}m continuous required; largest free slot: ${largestSlot}m).`
-        );
+        if (deadlinePreventedScheduling && task.deadline) {
+          const reasonMsg = `Cannot complete before deadline (${new Date(task.deadline).toISOString()}). Earliest completion would be ${earliestFinish?.toISOString()}.`;
+          unscheduledTasks.push({
+            taskId: task.id,
+            title: task.title,
+            duration: task.duration,
+            priority: task.priority,
+            reason: reasonMsg,
+          });
+          explanations.push(`Could not schedule '${task.title}': ${reasonMsg}`);
+        } else {
+          const largestSlot = currentFreeSlots.reduce(
+            (max, s) => Math.max(max, s.durationMinutes),
+            0
+          );
+          unscheduledTasks.push({
+            taskId: task.id,
+            title: task.title,
+            duration: task.duration,
+            priority: task.priority,
+            reason: `Requires ${task.duration}m continuous time, but largest available slot is ${largestSlot}m (splitting not permitted).`,
+          });
+          explanations.push(
+            `Could not fit '${task.title}' (${task.duration}m continuous required; largest free slot: ${largestSlot}m).`
+          );
+        }
       }
     } else {
       // Task splitting is permitted

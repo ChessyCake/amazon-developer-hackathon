@@ -131,18 +131,15 @@ export async function runAgent(
 
         // Execute each requested tool call
         for (const toolCall of response.toolCalls) {
-          // Ensure ownership default: attach userId if not provided
-          if (!toolCall.arguments.userId) {
-            toolCall.arguments.userId = targetUserId;
-          }
+          // Security Guardrail: Strictly enforce targetUserId authorization; prevent spoofed userId from LLM / prompt injection
+          toolCall.arguments.userId = targetUserId;
 
           // Stage 4 Safety Guardrail: Prevent model from autonomously approving/committing plans (Requirement 14)
           let execResult;
           if (toolCall.name === "commit_plan" || toolCall.name === "approve_plan") {
-            const isUserAffirmative =
-              /(approve|commit|confirm|proceed|apply|yes|ok|sure|accept|do it)/i.test(
-                userMessage
-              );
+            const hasNegation = /(don't|do not|never|cancel|reject|stop|no\b|wait|not yet)/i.test(userMessage);
+            const hasAffirmation = /(approve|commit|confirm|proceed|apply|yes|ok|sure|accept|do it)/i.test(userMessage);
+            const isUserAffirmative = hasAffirmation && !hasNegation;
             if (!isUserAffirmative) {
               execResult = {
                 success: false,

@@ -304,6 +304,7 @@ export async function commitPlan(options: CommitPlanOptions) {
           date: proposal.date,
           status: PlanStatus.ACTIVE,
         },
+        orderBy: { version: "desc" },
       });
 
       if (currentActive && currentActive.id !== proposal.parentPlanId) {
@@ -313,7 +314,22 @@ export async function commitPlan(options: CommitPlanOptions) {
       }
     }
 
-    // 5. Update prior ACTIVE plans to SUPERSEDED
+    // 5. Schedule Integrity Guardrail: Validate schedule before commit
+    const sortedItems = [...proposal.items].sort((a, b) => a.order - b.order);
+    for (let i = 0; i < sortedItems.length; i++) {
+      const cur = sortedItems[i];
+      if (new Date(cur.endTime).getTime() <= new Date(cur.startTime).getTime()) {
+        throw new Error(`Invalid schedule: item '${cur.title}' has invalid start/end timestamps.`);
+      }
+      if (i < sortedItems.length - 1) {
+        const next = sortedItems[i + 1];
+        if (new Date(cur.endTime).getTime() > new Date(next.startTime).getTime()) {
+          throw new Error(`Invalid schedule: overlapping items detected between '${cur.title}' and '${next.title}'.`);
+        }
+      }
+    }
+
+    // 6. Update prior ACTIVE plans to SUPERSEDED
     await tx.plan.updateMany({
       where: {
         userId: targetUserId,

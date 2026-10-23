@@ -67,6 +67,9 @@ export async function updatePreferences(
     if (input.workEndTime && !/^\d{2}:\d{2}$/.test(input.workEndTime)) {
       throw new Error("workEndTime must be in HH:MM 24-hour format.");
     }
+    if (input.workStartTime && input.workEndTime && input.workStartTime >= input.workEndTime) {
+      throw new Error("workStartTime must be earlier than workEndTime.");
+    }
 
     const prefData: Record<string, number | string> = {};
     if (input.focusMinutes !== undefined) prefData.focusMinutes = input.focusMinutes;

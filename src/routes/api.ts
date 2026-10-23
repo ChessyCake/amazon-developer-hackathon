@@ -134,6 +134,10 @@ router.get("/plans", async (req: Request, res: Response) => {
 router.post("/plans/generate", async (req: Request, res: Response) => {
   try {
     const { date, overwriteApproved, userId } = req.body;
+    if (!date || typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      res.status(400).json({ success: false, error: "Field 'date' in YYYY-MM-DD format is required." });
+      return;
+    }
     const result = await generateAndSavePlan({
       date,
       overwriteApproved: !!overwriteApproved,
@@ -148,6 +152,10 @@ router.post("/plans/generate", async (req: Request, res: Response) => {
 router.post("/plans/approve", async (req: Request, res: Response) => {
   try {
     const { planId, userId } = req.body;
+    if (!planId || typeof planId !== "string" || planId.trim() === "") {
+      res.status(400).json({ success: false, error: "Field 'planId' is required." });
+      return;
+    }
     const result = await approvePlan(planId, userId);
     res.json({ success: true, ...result });
   } catch (error: any) {
@@ -196,6 +204,10 @@ router.post("/plans/replan/compare", async (req: Request, res: Response) => {
 router.post("/plans/replan/commit", async (req: Request, res: Response) => {
   try {
     const { planId, expectedVersion, userId } = req.body;
+    if (!planId || typeof planId !== "string" || planId.trim() === "") {
+      res.status(400).json({ success: false, error: "Field 'planId' is required." });
+      return;
+    }
     const result = await commitPlan({
       planId,
       expectedVersion,
@@ -210,6 +222,10 @@ router.post("/plans/replan/commit", async (req: Request, res: Response) => {
 router.post("/plans/replan/reject", async (req: Request, res: Response) => {
   try {
     const { planId, reason, userId } = req.body;
+    if (!planId || typeof planId !== "string" || planId.trim() === "") {
+      res.status(400).json({ success: false, error: "Field 'planId' is required." });
+      return;
+    }
     const result = await rejectPlan({
       planId,
       reason,
@@ -373,4 +389,236 @@ router.post("/seed-demo", async (req: Request, res: Response) => {
   }
 });
 
+// ==========================================
+// STAGE 6: ADVANCED PRODUCTIVITY API ROUTES
+// ==========================================
+
+import {
+  createGoal,
+  listGoals,
+  getGoal,
+  updateGoal,
+  deleteGoal,
+  decomposeGoal,
+} from "../services/goalService.js";
+import { analyzeDeadlineRisks } from "../services/riskAnalysisService.js";
+import {
+  createRecurringRule,
+  listRecurringRules,
+  generateRecurringTasks,
+  deleteRecurringRule,
+} from "../services/recurringService.js";
+import { getDailyBriefing } from "../services/briefingService.js";
+import { simulateWhatIfPlans } from "../services/whatIfService.js";
+import { getWeeklyReview } from "../services/reviewService.js";
+import {
+  startFocusSession,
+  recordInterruption,
+  completeFocusSession,
+  listFocusSessions,
+} from "../services/focusSessionService.js";
+
+// 1. Goals & Decomposition
+router.get("/goals", async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string | undefined;
+    const status = req.query.status as any;
+    const goals = await listGoals(userId, status);
+    res.json({ success: true, goals });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/goals", async (req: Request, res: Response) => {
+  try {
+    const goal = await createGoal(req.body);
+    res.status(201).json({ success: true, goal });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.get("/goals/:id", async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string | undefined;
+    const goal = await getGoal(req.params.id, userId);
+    res.json({ success: true, goal });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.patch("/goals/:id", async (req: Request, res: Response) => {
+  try {
+    const userId = (req.body.userId || req.query.userId) as string | undefined;
+    const goal = await updateGoal(req.params.id, req.body, userId);
+    res.json({ success: true, goal });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.delete("/goals/:id", async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string | undefined;
+    const result = await deleteGoal(req.params.id, userId);
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/goals/:id/decompose", async (req: Request, res: Response) => {
+  try {
+    const userId = req.body.userId || req.query.userId;
+    const result = await decomposeGoal({
+      goalId: req.params.id,
+      userId,
+      milestones: req.body.milestones,
+    });
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// 2. Deadline Risk Analysis
+router.get("/risks", async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string | undefined;
+    const asOfDate = req.query.asOfDate as string | undefined;
+    const lookaheadDays = req.query.lookaheadDays
+      ? parseInt(req.query.lookaheadDays as string, 10)
+      : undefined;
+    const report = await analyzeDeadlineRisks(userId, { asOfDate, lookaheadDays });
+    res.json({ success: true, report });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// 3. Recurring Routines
+router.get("/recurring", async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string | undefined;
+    const rules = await listRecurringRules(userId);
+    res.json({ success: true, rules });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/recurring", async (req: Request, res: Response) => {
+  try {
+    const rule = await createRecurringRule(req.body);
+    res.status(201).json({ success: true, rule });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/recurring/generate", async (req: Request, res: Response) => {
+  try {
+    const { userId, date, horizonDays } = req.body;
+    const result = await generateRecurringTasks(userId, date, horizonDays);
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.delete("/recurring/:id", async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string | undefined;
+    const result = await deleteRecurringRule(req.params.id, userId);
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// 4. Daily Briefing
+router.get("/briefing", async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string | undefined;
+    const date = req.query.date as string | undefined;
+    const briefing = await getDailyBriefing(userId, date);
+    res.json({ success: true, briefing });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// 5. What-If Planning Simulation
+router.get("/plans/what-if", async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string | undefined;
+    const date = req.query.date as string | undefined;
+    const report = await simulateWhatIfPlans(userId, date);
+    res.json({ success: true, report });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// 6. Weekly Review
+router.get("/review/weekly", async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string | undefined;
+    const weekStartDate = req.query.weekStartDate as string | undefined;
+    const review = await getWeeklyReview(userId, weekStartDate);
+    res.json({ success: true, review });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// 7. Focus Sessions
+router.post("/focus-sessions/start", async (req: Request, res: Response) => {
+  try {
+    const session = await startFocusSession(req.body);
+    res.status(201).json({ success: true, session });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/focus-sessions/:id/interruption", async (req: Request, res: Response) => {
+  try {
+    const userId = req.body.userId || req.query.userId;
+    const session = await recordInterruption(req.params.id, userId, req.body.reason);
+    res.json({ success: true, session });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/focus-sessions/:id/complete", async (req: Request, res: Response) => {
+  try {
+    const userId = req.body.userId || req.query.userId;
+    const session = await completeFocusSession({
+      sessionId: req.params.id,
+      userId,
+      notes: req.body.notes,
+      markTaskComplete: req.body.markTaskComplete,
+    });
+    res.json({ success: true, session });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.get("/focus-sessions", async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string | undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+    const sessions = await listFocusSessions(userId, limit);
+    res.json({ success: true, sessions });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
 export { router as apiRouter };
+

@@ -30,7 +30,7 @@ test("McpServer registers all LifeOS tools (Stage 1, 2, 4)", async () => {
   const server = new McpServer({ name: "lifeos-test", version: "0.1.0" });
   registerAllTools(server);
 
-  // Verify that registering all tools succeeds and all 17 tools are present
+  // Verify that registering all tools succeeds and all tools are present
   assert.ok(server);
   const toolKeys = Object.keys((server as any)._registeredTools || {});
   const expectedTools = [
@@ -51,6 +51,21 @@ test("McpServer registers all LifeOS tools (Stage 1, 2, 4)", async () => {
     "reject_plan",
     "get_plan_history",
     "rollback_plan",
+    // Stage 6 Tools
+    "create_goal",
+    "decompose_goal",
+    "list_goals",
+    "get_goal",
+    "analyze_deadline_risks",
+    "create_recurring_rule",
+    "generate_recurring_tasks",
+    "list_recurring_rules",
+    "get_daily_briefing",
+    "simulate_what_if_plans",
+    "get_weekly_review",
+    "start_focus_session",
+    "record_interruption",
+    "complete_focus_session",
   ];
   for (const expected of expectedTools) {
     assert.ok(

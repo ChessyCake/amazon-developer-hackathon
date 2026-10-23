@@ -46,9 +46,16 @@ export class TaskNotFoundError extends Error {
 export async function createTask(input: CreateTaskInput): Promise<Task> {
   const targetUserId = await resolveUserId(input.userId);
 
+  if (!input.title || typeof input.title !== "string" || input.title.trim().length === 0) {
+    throw new Error("Task title is required and cannot be empty.");
+  }
+  if (input.title.length > 500) {
+    throw new Error("Task title cannot exceed 500 characters.");
+  }
+
   const duration = input.duration ?? 30;
-  if (duration <= 0) {
-    throw new Error("Task duration must be a positive integer in minutes.");
+  if (duration <= 0 || duration > 1440) {
+    throw new Error("Task duration must be a positive integer between 1 and 1440 minutes.");
   }
 
   const deadlineDate = input.deadline ? new Date(input.deadline) : null;

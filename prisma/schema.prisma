@@ -39,6 +39,30 @@ enum PlanItemType {
   BUFFER
 }
 
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum MilestoneStatus {
+  PENDING
+  COMPLETED
+}
+
+enum RecurrenceFrequency {
+  DAILY
+  WEEKDAYS
+  WEEKLY
+  CUSTOM
+}
+
+enum FocusSessionStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+}
+
 model User {
   id             String           @id @default(cuid())
   email          String           @unique
@@ -52,30 +76,43 @@ model User {
   plans          Plan[]
   actionHistory  ActionHistory[]
   conversations  Conversation[]
+  goals          Goal[]
+  recurringRules RecurringRule[]
+  focusSessions  FocusSession[]
 
   @@map("users")
 }
 
 model Task {
-  id             String        @id @default(cuid())
-  userId         String
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title          String
-  description    String?
-  duration       Int           @default(30)
-  priority       TaskPriority  @default(MEDIUM)
-  deadline       DateTime?
-  status         TaskStatus    @default(PENDING)
-  tags           String[]      @default([])
-  dependencies   String[]      @default([])
-  allowSplitting Boolean       @default(false)
-  completedAt    DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  planItems      PlanItem[]
+  id              String         @id @default(cuid())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  duration        Int            @default(30)
+  priority        TaskPriority   @default(MEDIUM)
+  deadline        DateTime?
+  status          TaskStatus     @default(PENDING)
+  tags            String[]       @default([])
+  dependencies    String[]       @default([])
+  allowSplitting  Boolean        @default(false)
+  completedAt     DateTime?
+  goalId          String?
+  goal            Goal?          @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  milestoneId     String?
+  milestone       Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  recurringRuleId String?
+  recurringRule   RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
+  recurrenceDate  String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  planItems       PlanItem[]
+  focusSessions   FocusSession[]
 
+  @@unique([recurringRuleId, recurrenceDate])
   @@index([userId, status])
   @@index([userId, deadline])
+  @@index([userId, goalId])
   @@map("tasks")
 }
 
@@ -195,3 +232,79 @@ model ConversationMessage {
   @@index([conversationId, createdAt])
   @@map("conversation_messages")
 }
+
+model Goal {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  targetDate  DateTime?
+  status      GoalStatus    @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  milestones  Milestone[]
+  tasks       Task[]
+
+  @@index([userId, status])
+  @@map("goals")
+}
+
+model Milestone {
+  id          String          @id @default(cuid())
+  goalId      String
+  goal        Goal            @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  targetDate  DateTime?
+  order       Int             @default(0)
+  status      MilestoneStatus @default(PENDING)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  tasks       Task[]
+
+  @@index([goalId, order])
+  @@map("milestones")
+}
+
+model RecurringRule {
+  id          String              @id @default(cuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  duration    Int                 @default(30)
+  priority    TaskPriority        @default(MEDIUM)
+  frequency   RecurrenceFrequency @default(DAILY)
+  daysOfWeek  Int[]               @default([])
+  tags        String[]            @default([])
+  startDate   DateTime            @default(now())
+  endDate     DateTime?
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  tasks       Task[]
+
+  @@index([userId, isActive])
+  @@map("recurring_rules")
+}
+
+model FocusSession {
+  id                 String             @id @default(cuid())
+  userId             String
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId             String?
+  task               Task?              @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  startTime          DateTime           @default(now())
+  endTime            DateTime?
+  durationMinutes    Int?
+  interruptionsCount Int                @default(0)
+  notes              String?
+  status             FocusSessionStatus @default(ACTIVE)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([userId, status])
+  @@map("focus_sessions")
+}
+

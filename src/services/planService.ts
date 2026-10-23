@@ -91,72 +91,71 @@ export async function generateAndSavePlan(
   // 3. Invoke deterministic scheduler
   const scheduleResult = scheduleDay(plannerInput);
 
-  // 4. Persist plan in transaction
-  const plan = await prisma.$transaction(async (tx) => {
-    // If regenerating and an existing plan was found, clean up if it was a draft
-    const latestPlan = await tx.plan.findFirst({
-      where: { userId: targetUserId, date },
-      orderBy: { version: "desc" },
-    });
+  // 4. Persist plan in transaction with batch nested item creation
+  const plan = await prisma.$transaction(
+    async (tx) => {
+      // If regenerating and an existing plan was found, clean up if it was a draft
+      const latestPlan = await tx.plan.findFirst({
+        where: { userId: targetUserId, date },
+        orderBy: { version: "desc" },
+      });
 
-    let nextVersion = 1;
-    if (latestPlan) {
-      if (latestPlan.status === PlanStatus.DRAFT) {
-        await tx.planItem.deleteMany({
-          where: { planId: latestPlan.id },
-        });
-        await tx.plan.delete({
-          where: { id: latestPlan.id },
-        });
-        nextVersion = latestPlan.version;
-      } else {
-        nextVersion = latestPlan.version + 1;
+      let nextVersion = 1;
+      if (latestPlan) {
+        if (latestPlan.status === PlanStatus.DRAFT) {
+          await tx.planItem.deleteMany({
+            where: { planId: latestPlan.id },
+          });
+          await tx.plan.delete({
+            where: { id: latestPlan.id },
+          });
+          nextVersion = latestPlan.version;
+        } else {
+          nextVersion = latestPlan.version + 1;
+        }
       }
-    }
 
-    const newPlan = await tx.plan.create({
-      data: {
-        userId: targetUserId,
-        date,
-        status: PlanStatus.DRAFT,
-        version: nextVersion,
-      },
-    });
-
-    for (const item of scheduleResult.scheduledItems) {
-      await tx.planItem.create({
+      const newPlan = await tx.plan.create({
         data: {
-          planId: newPlan.id,
-          order: item.order,
-          itemType: item.itemType,
-          title: item.title,
-          startTime: item.startTime,
-          endTime: item.endTime,
-          taskId: item.taskId || null,
-          calendarEventId: item.calendarEventId || null,
+          userId: targetUserId,
+          date,
+          status: PlanStatus.DRAFT,
+          version: nextVersion,
+          items: {
+            create: scheduleResult.scheduledItems.map((item) => ({
+              order: item.order,
+              itemType: item.itemType,
+              title: item.title,
+              startTime: item.startTime,
+              endTime: item.endTime,
+              taskId: item.taskId || null,
+              calendarEventId: item.calendarEventId || null,
+            })),
+          },
         },
       });
-    }
 
-    await tx.actionHistory.create({
-      data: {
-        userId: targetUserId,
-        actionType: "GENERATE_PLAN",
-        entityType: "PLAN",
-        entityId: newPlan.id,
-        payload: {
-          date,
-          status: newPlan.status,
-          scheduledCount: scheduleResult.scheduledItems.length,
-          unscheduledCount: scheduleResult.unscheduledTasks.length,
-          isFeasible: scheduleResult.isFeasible,
-          metrics: scheduleResult.metrics as any,
+      await tx.actionHistory.create({
+        data: {
+          userId: targetUserId,
+          actionType: "GENERATE_PLAN",
+          entityType: "PLAN",
+          entityId: newPlan.id,
+          payload: {
+            date,
+            status: newPlan.status,
+            scheduledCount: scheduleResult.scheduledItems.length,
+            unscheduledCount: scheduleResult.unscheduledTasks.length,
+            isFeasible: scheduleResult.isFeasible,
+            metrics: scheduleResult.metrics as any,
+          },
         },
-      },
-    });
+      });
 
-    return newPlan;
-  });
+      return newPlan;
+    },
+    { maxWait: 10000, timeout: 20000 }
+  );
 
   return {
     planId: plan.id,
@@ -215,11 +214,25 @@ export async function approvePlan(
         id: planId,
         userId: targetUserId,
       },
-      include: { items: true },
+      include: { items: { orderBy: { order: "asc" } } },
     });
 
     if (!existing) {
       throw new Error(`Plan with id '${planId}' not found for user.`);
+    }
+
+    // Schedule Integrity Guardrail: Validate schedule before approval
+    for (let i = 0; i < existing.items.length; i++) {
+      const cur = existing.items[i];
+      if (new Date(cur.endTime).getTime() <= new Date(cur.startTime).getTime()) {
+        throw new Error(`Invalid schedule: item '${cur.title}' has invalid start/end timestamps.`);
+      }
+      if (i < existing.items.length - 1) {
+        const next = existing.items[i + 1];
+        if (new Date(cur.endTime).getTime() > new Date(next.startTime).getTime()) {
+          throw new Error(`Invalid schedule: overlapping items detected between '${cur.title}' and '${next.title}'.`);
+        }
+      }
     }
 
     // Mark any existing active plans as superseded
